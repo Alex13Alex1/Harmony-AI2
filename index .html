@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Harmony Sphere v2 — Harmonic Soccerball</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #05070f;
+  --panel: rgba(8,12,24,0.94);
+  --border: rgba(60,120,255,0.16);
+  --accent: #3d7fff;
+  --accent2: #9b4dff;
+  --gold: #ffbe3d;
+  --green: #2dffa0;
+  --red: #ff3d6e;
+  --penta: #ffbe3d;   /* pentagon = NOTE = gold */
+  --hexa: #3d7fff;    /* hexagon  = CHORD = blue */
+  --text: #ccd8ff;
+  --muted: rgba(160,185,255,0.4);
+  --ff: 'Syne', sans-serif;
+  --fm: 'JetBrains Mono', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width:100%; height:100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ff);
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ── CANVAS ── */
+#cv { position:fixed; inset:0; z-index:0; display:block; width:100%; height:100%; }
+
+/* ── GRAIN ── */
+body::before {
+  content:''; position:fixed; inset:0; z-index:1; pointer-events:none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  opacity:.6;
+}
+
+/* ── TOP ── */
+#top {
+  position:fixed; top:0; left:0; right:0; z-index:20;
+  height: env(safe-area-inset-top, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+#topbar {
+  height:50px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 14px;
+  background: linear-gradient(to bottom, rgba(5,7,15,0.98) 70%, transparent);
+  border-bottom:1px solid var(--border);
+}
+.logo {
+  font-size:15px; font-weight:800; letter-spacing:.1em;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  white-space:nowrap;
+}
+.mode-row {
+  display:flex; gap:3px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid var(--border); border-radius:8px; padding:2px;
+}
+.mtab {
+  padding:4px 10px; border-radius:5px;
+  font-size:10px; font-weight:700; letter-spacing:.07em;
+  color:var(--muted); background:transparent; border:none;
+  cursor:pointer; transition:all .18s; font-family:var(--ff);
+  white-space:nowrap;
+}
+.mtab.on { background:var(--accent); color:#fff; box-shadow:0 0 10px rgba(61,127,255,.5); }
+
+/* ── LEGEND STRIP ── */
+#legend {
+  position:fixed; top:50px; left:0; right:0; z-index:18;
+  display:flex; justify-content:center; gap:20px; padding:6px 14px;
+  background:rgba(5,7,15,0.7);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(10px);
+}
+.leg-item { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--muted); font-family:var(--fm); }
+.leg-dot { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+
+/* ── INFO CARD (center overlay) ── */
+#info-card {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  z-index:20; width:min(340px, calc(100vw - 28px));
+  background: var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px; padding:14px 16px;
+  backdrop-filter:blur(24px);
+  transition:opacity .2s, transform .2s;
+  pointer-events:none;
+}
+#info-card.hidden { opacity:0; transform:translateX(-50%) translateY(10px); }
+
+#ic-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+#ic-name { font-size:28px; font-weight:800; font-family:var(--fm); color:#fff; line-height:1; }
+#ic-badge {
+  padding:3px 9px; border-radius:5px; font-size:9px; font-weight:700;
+  letter-spacing:.12em; font-family:var(--fm);
+}
+#ic-badge.note { background:rgba(255,190,61,.15); border:1px solid rgba(255,190,61,.4); color:var(--gold); }
+#ic-badge.chord { background:rgba(61,127,255,.15); border:1px solid rgba(61,127,255,.4); color:var(--accent); }
+
+#ic-notes { font-size:11px; font-family:var(--fm); color:var(--muted); margin-bottom:10px; }
+
+#ic-sugg { display:flex; gap:5px; flex-wrap:wrap; }
+.sugg-pill {
+  padding:4px 10px; border-radius:20px;
+  background:rgba(45,255,160,.06); border:1px solid rgba(45,255,160,.25);
+  font-size:10px; font-weight:600; font-family:var(--fm); color:var(--green);
+  cursor:pointer; pointer-events:all; transition:all .15s;
+}
+.sugg-pill:hover, .sugg-pill:active { background:rgba(45,255,160,.18); }
+
+/* ── SIDE DRAWER (key + scale) ── */
+#drawer-btn {
+  position:fixed; left:10px; top:50%; transform:translateY(-50%);
+  z-index:20; width:34px; height:60px;
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:14px; backdrop-filter:blur(16px); transition:all .2s;
+}
+#drawer-btn:hover { border-color:var(--accent); }
+
+#drawer {
+  position:fixed; left:0; top:0; bottom:0; z-index:30;
+  width:220px;
+  background:rgba(5,7,15,0.97);
+  border-right:1px solid var(--border);
+  padding: 70px 14px 16px;
+  transform:translateX(-100%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  overflow-y:auto;
+  display:flex; flex-direction:column; gap:18px;
+}
+#drawer.open { transform:translateX(0); }
+#drawer-close {
+  position:absolute; top:14px; right:12px;
+  font-size:18px; cursor:pointer; color:var(--muted); background:none; border:none;
+  font-family:var(--ff);
+}
+
+.d-label {
+  font-size:9px; font-weight:700; letter-spacing:.18em;
+  color:var(--muted); font-family:var(--fm); text-transform:uppercase; margin-bottom:6px;
+}
+.key-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; }
+.kbtn {
+  padding:6px 2px; border-radius:5px; text-align:center;
+  font-size:11px; font-weight:600; font-family:var(--fm);
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07);
+  color:var(--text); cursor:pointer; transition:all .15s;
+}
+.kbtn:hover { background:rgba(61,127,255,.15); border-color:var(--accent); }
+.kbtn.on { background:rgba(61,127,255,.25); border-color:var(--accent); color:#fff; box-shadow:0 0 8px rgba(61,127,255,.4); }
+
+.scale-col { display:flex; flex-direction:column; gap:3px; }
+.sbtn {
+  padding:7px 10px; border-radius:7px;
+  font-size:11px; font-weight:500; font-family:var(--ff);
+  background:rgba(255,255,255,0.03); border:1px solid transparent;
+  color:var(--muted); cursor:pointer; transition:all .15s; text-align:left;
+}
+.sbtn:hover { color:var(--text); border-color:var(--border); }
+.sbtn.on { color:#fff; background:rgba(155,77,255,.18); border-color:rgba(155,77,255,.4); }
+
+/* Progression in drawer */
+.prog-scroll {
+  flex:1; display:flex; flex-direction:column; gap:3px;
+  overflow-y:auto; min-height:80px;
+}
+.prog-scroll::-webkit-scrollbar { width:2px; }
+.prog-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.ph-item {
+  padding:5px 9px; border-radius:6px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--border);
+  font-size:11px; font-family:var(--fm);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.ph-item.cur { background:rgba(61,127,255,.12); border-color:var(--accent); }
+.ph-num { font-size:9px; color:var(--muted); }
+
+/* ── BOTTOM BAR ── */
+#bot {
+  position:fixed; bottom:0; left:0; right:0; z-index:20;
+  background:rgba(5,7,15,0.97);
+  border-top:1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  backdrop-filter:blur(20px);
+}
+#botbar {
+  height:60px; display:flex; align-items:center;
+  padding:0 12px; gap:10px;
+}
+
+.tbtns { display:flex; gap:5px; }
+.tb {
+  width:36px; height:36px; border-radius:9px;
+  border:1px solid var(--border); background:rgba(255,255,255,0.04);
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:13px; color:var(--text); transition:all .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tb:hover, .tb:active { background:rgba(61,127,255,.2); border-color:var(--accent); }
+.tb.on { background:rgba(45,255,160,.18); border-color:var(--green); color:var(--green); }
+.tb.rec { color:var(--red); border-color:rgba(255,61,110,.25); }
+.tb.rec.on { background:rgba(255,61,110,.18); animation:rec-p 1s infinite; }
+@keyframes rec-p { 0%,100%{box-shadow:0 0 0 0 rgba(255,61,110,.4)} 50%{box-shadow:0 0 0 5px rgba(255,61,110,0)} }
+
+#timeline {
+  flex:1; height:38px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--border); border-radius:9px;
+  display:flex; align-items:center; padding:0 8px;
+  gap:4px; overflow-x:auto; overflow-y:hidden;
+  scrollbar-width:none;
+}
+#timeline::-webkit-scrollbar { display:none; }
+.tn {
+  height:24px; min-width:38px; border-radius:5px;
+  font-size:10px; font-weight:700; font-family:var(--fm);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; padding:0 7px; white-space:nowrap;
+  border:1px solid rgba(61,127,255,.3);
+  background:rgba(61,127,255,.12); color:var(--accent);
+  transition:all .15s; flex-shrink:0;
+}
+.tn.cur { background:rgba(61,127,255,.28); box-shadow:0 0 7px rgba(61,127,255,.4); }
+.tph { font-size:10px; color:var(--muted); font-family:var(--fm); letter-spacing:.08em; white-space:nowrap; }
+
+.bpm-b { display:flex; flex-direction:column; align-items:center; gap:1px; min-width:50px; }
+#bpmv { font-size:19px; font-weight:800; font-family:var(--fm); color:#fff; line-height:1; }
+.bpm-lb { font-size:7px; color:var(--muted); letter-spacing:.15em; }
+.bpm-adj { display:flex; gap:2px; }
+.badj {
+  width:16px; height:14px; border-radius:3px; border:1px solid var(--border);
+  background:rgba(255,255,255,0.04); cursor:pointer; font-size:9px;
+  color:var(--muted); display:flex; align-items:center; justify-content:center;
+}
+
+.exp {
+  padding:7px 11px; border-radius:8px;
+  background:linear-gradient(135deg,rgba(61,127,255,.2),rgba(155,77,255,.2));
+  border:1px solid rgba(155,77,255,.35);
+  color:#fff; font-size:10px; font-weight:700;
+  cursor:pointer; white-space:nowrap; font-family:var(--ff);
+  transition:all .2s;
+}
+.exp:hover { box-shadow:0 0 14px rgba(155,77,255,.35); }
+
+/* ── DRAWER OVERLAY ── */
+#dov {
+  display:none; position:fixed; inset:0; z-index:29;
+  background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);
+}
+#dov.on { display:block; }
+
+/* ── ONBOARDING ── */
+#ob {
+  position:fixed; inset:0; z-index:100;
+  background:rgba(5,7,15,0.9);
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(10px); padding:20px;
+}
+.ob-c {
+  background:rgba(8,12,24,0.99);
+  border:1px solid rgba(61,127,255,.25);
+  border-radius:20px; padding:32px 28px;
+  max-width:400px; width:100%; text-align:center;
+  box-shadow:0 0 60px rgba(61,127,255,.12);
+}
+.ob-t {
+  font-size:28px; font-weight:800; margin-bottom:6px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.ob-s { font-size:13px; color:var(--muted); margin-bottom:24px; line-height:1.6; }
+.ob-list { display:flex; flex-direction:column; gap:8px; margin-bottom:28px; text-align:left; }
+.ob-row {
+  display:flex; gap:10px; align-items:flex-start; padding:10px 12px;
+  background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;
+}
+.ob-ico { font-size:18px; flex-shrink:0; }
+.ob-tx { font-size:12px; color:var(--muted); line-height:1.5; }
+.ob-tx strong { color:var(--text); }
+.ob-go {
+  padding:13px 36px; border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff; font-size:14px; font-weight:700;
+  cursor:pointer; border:none; font-family:var(--ff);
+  box-shadow:0 0 28px rgba(61,127,255,.4);
+  transition:all .2s; letter-spacing:.06em;
+}
+.ob-go:hover, .ob-go:active { transform:translateY(-2px); box-shadow:0 4px 36px rgba(61,127,255,.6); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 480px) {
+  .logo { font-size:13px; }
+  .mtab { padding:4px 7px; font-size:9px; }
+  #bpmv { font-size:16px; }
+  .exp { font-size:9px; padding:6px 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 3D Canvas -->
+<canvas id="cv"></canvas>
+
+<!-- Top Bar -->
+<div id="top">
+  <div id="topbar">
+    <div class="logo">✦ HARMONY SPHERE</div>
+    <div class="mode-row">
+      <button class="mtab on" onclick="setMode('compose',this)">COMPOSE</button>
+      <button class="mtab" onclick="setMode('explore',this)">EXPLORE</button>
+      <button class="mtab" onclick="setMode('learn',this)">LEARN</button>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="leg-item">
+    <div class="leg-dot" style="background:var(--gold);"></div>
+    <span>Pentagon = NOTE (12 хроматических)</span>
+  </div>
+  <div class="leg-item">
+    <div class="leg-dot" style="background:var(--accent);border-radius:50%;"></div>
+    <span>Hexagon = CHORD (20 аккордов)</span>
+  </div>
+</div>
+
+<!-- Drawer overlay -->
+<div id="dov" onclick="closeDrawer()"></div>
+
+<!-- Side drawer -->
+<div id="drawer">
+  <button id="drawer-close" onclick="closeDrawer()">✕</button>
+
+  <div>
+    <div class="d-label">Root Key</div>
+    <div class="key-grid" id="kgrid"></div>
+  </div>
+  <div>
+    <div class="d-label">Scale / Mode</div>
+    <div class="scale-col" id="scol">
+      <div class="sbtn on" data-s="major" onclick="pickScale(this)">Major</div>
+      <div class="sbtn" data-s="minor" onclick="pickScale(this)">Natural Minor</div>
+      <div class="sbtn" data-s="dorian" onclick="pickScale(this)">Dorian</div>
+      <div class="sbtn" data-s="mixolydian" onclick="pickScale(this)">Mixolydian</div>
+      <div class="sbtn" data-s="lydian" onclick="pickScale(this)">Lydian</div>
+      <div class="sbtn" data-s="phrygian" onclick="pickScale(this)">Phrygian</div>
+    </div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <div class="d-label">Progression</div>
+    <div class="prog-scroll" id="pscroll">
+      <div style="font-size:10px;color:var(--muted);font-family:var(--fm);padding:6px 0;">Click chords to build...</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="tb" style="flex:1;width:auto;" onclick="undoLast()">↩ Undo</button>
+      <button class="tb" style="flex:1;width:auto;" onclick="clearAll()">✕ Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer toggle -->
+<div id="drawer-btn" onclick="toggleDrawer()">☰</div>
+
+<!-- Info Card -->
+<div id="info-card" class="hidden">
+  <div id="ic-top">
+    <div id="ic-name">—</div>
+    <div id="ic-badge" class="chord">CHORD</div>
+  </div>
+  <div id="ic-notes"></div>
+  <div id="ic-sugg"></div>
+</div>
+
+<!-- Bottom Bar -->
+<div id="bot">
+  <div id="botbar">
+    <div class="tbtns">
+      <button class="tb" id="btn-play" onclick="togglePlay()">▶</button>
+      <button class="tb rec" id="btn-rec" onclick="toggleRec()">⏺</button>
+      <button class="tb" onclick="undoLast()" title="Undo">↩</button>
+    </div>
+    <div id="timeline"><div class="tph">No chords yet</div></div>
+    <div class="bpm-b">
+      <div id="bpmv">120</div>
+      <div class="bpm-lb">BPM</div>
+      <div class="bpm-adj">
+        <div class="badj" onclick="adjBPM(-5)">−</div>
+        <div class="badj" onclick="adjBPM(5)">+</div>
+      </div>
+    </div>
+    <button class="exp" onclick="exportProg()">⬇ MIDI</button>
+  </div>
+</div>
+
+<!-- Onboarding -->
+<div id="ob">
+  <div class="ob-c">
+    <div class="ob-t">Harmony Sphere</div>
+    <div class="ob-s">Топология гармонии — футбольный мяч как инструмент.<br>Пятиугольники = ноты. Шестиугольники = аккорды.</div>
+    <div class="ob-list">
+      <div class="ob-row">
+        <div class="ob-ico">🟡</div>
+        <div class="ob-tx"><strong>Пятиугольник (нота)</strong> — 12 хроматических нот. Противоположные — тритон. C ↔ F#.</div>
+      </div>
+      <div class="ob-row">
+        <div class="ob-ico">🔵</div>
+        <div class="ob-tx"><strong>Шестиугольник (аккорд)</strong> — окружён 3 нотами, образующими максимально консонансный трезвучие.</div>
+      </div>
+      <div class="ob-row">
+        <div class="ob-ico">👆</div>
+        <div class="ob-tx"><strong>Вращай и нажимай</strong> — тяни для вращения, тапай грань чтобы услышать звук и добавить в прогрессию.</div>
+      </div>
+    </div>
+    <button class="ob-go" onclick="startApp()">НАЧАТЬ ИССЛЕДОВАНИЕ</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   HARMONY SPHERE v2
+   Правильная топология по "Harmonic Soccerball":
+   - 12 пятиугольников = хроматические НОТЫ (вершины икосаэдра)
+   - 20 шестиугольников = АККОРДЫ (грани икосаэдра)
+   - Антиподы: C↔F#, каждая пара = тритон (6 полутонов)
+   - Каждый шестиугольник окружён 3 пятиугольниками = трезвучие
+═══════════════════════════════════════════════════════════════ */
+
+// ── ХРОМАТИКА ──
+const CHR = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+// ── АНТИПОДЫ: каждая пара = тритон (i + 6) % 12 ──
+// Pentagon i — antipode is Pentagon (i+6)%12
+// По статье: Do(C) на "северном полюсе" → Fa#(F#) на "южном"
+
+// ── ПЕНТАТОНИКА вокруг Do: D,E,G,A,B (no tritone) ──
+// Это соседние шестиугольники вокруг пятиугольника C
+
+// ── ГАММЫ ──
+const SCALES = {
+  major:      { steps:[0,2,4,5,7,9,11], qual:['M','m','m','M','M','m','d'] },
+  minor:      { steps:[0,2,3,5,7,8,10], qual:['m','d','M','m','m','M','M'] },
+  dorian:     { steps:[0,2,3,5,7,9,10], qual:['m','m','M','M','m','d','M'] },
+  mixolydian: { steps:[0,2,4,5,7,9,10], qual:['M','m','d','M','m','m','M'] },
+  lydian:     { steps:[0,2,4,6,7,9,11], qual:['M','M','m','d','M','m','m'] },
+  phrygian:   { steps:[0,1,3,5,7,8,10], qual:['m','M','M','m','d','M','m'] },
+};
+
+const QUAL_INTERVALS = { M:[0,4,7], m:[0,3,7], d:[0,3,6], a:[0,4,8] };
+const QUAL_NAMES = { M:'major', m:'minor', d:'dim', a:'aug' };
+
+// ── СОСТОЯНИЕ ──
+const ST = {
+  root: 0, scale: 'major',
+  prog: [], selected: null,
+  playing: false, looping: false, rec: false,
+  bpm: 120, mode: 'compose',
+  playIdx: 0, playTimer: null,
+};
+
+// ── ПОСТРОЕНИЕ АККОРДОВ ──
+function buildScaleChords() {
+  const { steps, qual } = SCALES[ST.scale];
+  return steps.map((s, i) => {
+    const rootNote = (ST.root + s) % 12;
+    const q = qual[i];
+    const intv = QUAL_INTERVALS[q] || QUAL_INTERVALS.M;
+    return {
+      name: CHR[rootNote] + (q === 'M' ? '' : q === 'm' ? 'm' : q === 'd' ? 'dim' : 'aug'),
+      root: rootNote,
+      quality: q,
+      qualName: QUAL_NAMES[q],
+      notes: intv.map(iv => CHR[(rootNote + iv) % 12]),
+      tension: q === 'd' ? 0.85 : q === 'm' ? 0.45 : 0.2,
+    };
+  });
+}
+
+// ── THREE.JS ──
+const cv = document.getElementById('cv');
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 100);
+camera.position.z = 3.6;
+
+// Lighting
+scene.add(new THREE.AmbientLight(0x334488, 0.5));
+const pl1 = new THREE.PointLight(0x3d7fff, 2.0, 12); pl1.position.set(3,3,3); scene.add(pl1);
+const pl2 = new THREE.PointLight(0x9b4dff, 1.0, 12); pl2.position.set(-3,-2,2); scene.add(pl2);
+const pl3 = new THREE.PointLight(0xffbe3d, 0.6, 12); pl3.position.set(0,3,-3); scene.add(pl3);
+
+// ── GEOMETRY: Truncated Icosahedron ──
+// Build 32 face centers using the actual truncated icosahedron structure
+// Pentagon positions = 12 icosahedron vertices (normalized)
+// Hexagon positions = 20 icosahedron face centers
+
+const phi = (1 + Math.sqrt(5)) / 2;
+const R = 1.25;
+
+// 12 icosahedron vertices → our 12 pentagons (NOTES)
+const icoVerts = [
+  [0, 1, phi],[0,-1, phi],[0, 1,-phi],[0,-1,-phi],
+  [1, phi, 0],[-1, phi, 0],[1,-phi, 0],[-1,-phi, 0],
+  [phi, 0, 1],[-phi, 0, 1],[phi, 0,-1],[-phi, 0,-1],
+].map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize().multiplyScalar(R));
+
+// 20 icosahedron face centers → our 20 hexagons (CHORDS)
+// These are the actual face centers of the icosahedron
+const icoFaces = [
+  [0,1,8],[0,8,4],[0,4,5],[0,5,9],[0,9,1],
+  [3,2,10],[3,10,6],[3,6,7],[3,7,11],[3,11,2],
+  [1,6,8],[8,6,10],[8,10,4],[4,10,2],[4,2,5],
+  [5,2,11],[5,11,9],[9,11,7],[9,7,1],[1,7,6],
+].map(face => {
+  const c = new THREE.Vector3();
+  face.forEach(i => c.add(icoVerts[i]));
+  return c.divideScalar(3).normalize().multiplyScalar(R);
+});
+
+// Pentagon-Hexagon adjacency (which hexagons surround which pentagon)
+// Each pentagon in icosahedron has 5 adjacent faces
+const PENTA_ADJ = [
+  [0,1,2,3,4],   // P0 (vertex 0)
+  [0,4,18,19,6], // P1 (vertex 1)
+  [9,10,14,13,5],// P2 (vertex 2)
+  [5,6,7,8,9],   // P3 (vertex 3)
+  [1,2,9,10,12], // P4 (vertex 4)  — simplified valid
+  [2,3,13,14,15],// P5 (vertex 5)
+  [10,11,19,6,7],// P6 (vertex 6)
+  [7,8,17,18,19],// P7 (vertex 7)
+  [0,11,12,1,6], // P8 (vertex 8)
+  [3,4,15,16,17],// P9 (vertex 9)
+  [5,11,12,13,8],// P10(vertex 10)
+  [3,9,15,16,8], // P11(vertex 11)
+];
+
+// Hexagon triple-pentagon neighbors (3 pentagons define each hexagon = a triad)
+// icoFaces[i] = [p1,p2,p3] — the 3 pentagon (note) vertices forming this hexagon face
+const HEX_PENTA = icoFaces.map((_, i) => {
+  const f = [
+    [0,1,8],[0,8,4],[0,4,5],[0,5,9],[0,9,1],
+    [3,2,10],[3,10,6],[3,6,7],[3,7,11],[3,11,2],
+    [1,6,8],[8,6,10],[8,10,4],[4,10,2],[4,2,5],
+    [5,2,11],[5,11,9],[9,11,7],[9,7,1],[1,7,6],
+  ][i];
+  return f; // indices into icoVerts = pentagon indices
+});
+
+let sGroup, fMeshes = [], lSprites = [], glowQ = [];
+
+function buildSphere() {
+  if (sGroup) scene.remove(sGroup);
+  sGroup = new THREE.Group();
+  fMeshes = [];
+
+  const chords = buildScaleChords();
+
+  // ── PENTAGONS (NOTES) ──
+  icoVerts.forEach((pos, i) => {
+    const noteIdx = (ST.root + i) % 12; // map vertex → chromatic note
+    const noteName = CHR[noteIdx];
+    const antipodeNote = CHR[(noteIdx + 6) % 12];
+    const isPentaton = [0,2,4,7,9].includes(noteIdx % 12); // is it in major pentatonic?
+
+    const geo = makeFaceGeo(5, 0.165);
+    const col = new THREE.Color(0x8a6a00).lerp(new THREE.Color(0xffbe3d), 0.7 + Math.random()*0.3);
+    const mat = new THREE.MeshStandardMaterial({
+      color: col, metalness: 0.4, roughness: 0.4,
+      transparent: true, opacity: 0.88, side: THREE.DoubleSide,
+      emissive: new THREE.Color(0xffbe3d), emissiveIntensity: 0.05,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    orientFace(m, pos);
+    m.userData = {
+      type: 'pentagon', idx: i, noteIdx,
+      noteName, antipode: antipodeNote,
+      pos: pos.clone(), isNote: true,
+      baseColor: col.clone(), baseEmissive: 0.05,
+    };
+    sGroup.add(m);
+    fMeshes.push(m);
+
+    // Edge
+    const eg = new THREE.EdgesGeometry(geo);
+    const em = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({
+      color: 0xffbe3d, transparent: true, opacity: 0.7
+    }));
+    orientFace(em, pos, 0.012);
+    sGroup.add(em);
+  });
+
+  // ── HEXAGONS (CHORDS) ──
+  icoFaces.forEach((pos, i) => {
+    const chord = chords[i % chords.length];
+    const pentaTriple = HEX_PENTA[i]; // 3 pentagon indices that define this chord
+
+    // Color based on chord quality
+    const col = chord.quality === 'm' ? new THREE.Color(0x1a2a6a) :
+                chord.quality === 'd' ? new THREE.Color(0x3a1540) :
+                new THREE.Color(0x0e2a4a);
+
+    const geo = makeFaceGeo(6, 0.15);
+    const mat = new THREE.MeshStandardMaterial({
+      color: col, metalness: 0.25, roughness: 0.55,
+      transparent: true, opacity: 0.72, side: THREE.DoubleSide,
+      emissive: new THREE.Color(0x3d7fff), emissiveIntensity: 0.04,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    orientFace(m, pos);
+    m.userData = {
+      type: 'hexagon', idx: i, chord,
+      pentaTriple, pos: pos.clone(),
+      baseColor: col.clone(), baseEmissive: 0.04,
+    };
+    sGroup.add(m);
+    fMeshes.push(m);
+
+    const eg = new THREE.EdgesGeometry(geo);
+    const em = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({
+      color: 0x3d7fff, transparent: true, opacity: 0.5,
+    }));
+    orientFace(em, pos, 0.008);
+    sGroup.add(em);
+  });
+
+  scene.add(sGroup);
+  buildLabels();
+}
+
+function makeFaceGeo(sides, size) {
+  const s = new THREE.Shape();
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2 - Math.PI / sides;
+    if (i === 0) s.moveTo(Math.cos(a)*size, Math.sin(a)*size);
+    else s.lineTo(Math.cos(a)*size, Math.sin(a)*size);
+  }
+  s.closePath();
+  return new THREE.ShapeGeometry(s);
+}
+
+function orientFace(obj, pos, extra = 0) {
+  const dir = pos.clone().normalize();
+  obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+  obj.position.copy(dir.clone().multiplyScalar(R + 0.005 + extra));
+}
+
+// ── LABELS ──
+function buildLabels() {
+  lSprites.forEach(s => scene.remove(s));
+  lSprites = [];
+
+  fMeshes.forEach(m => {
+    const ud = m.userData;
+    if (!ud.pos) return;
+
+    const cv2 = document.createElement('canvas');
+    cv2.width = 128; cv2.height = 72;
+    const ctx = cv2.getContext('2d');
+
+    ctx.clearRect(0,0,128,72);
+    ctx.textAlign = 'center';
+
+    if (ud.type === 'pentagon') {
+      // Big note name, small antipode
+      ctx.font = 'bold 26px "JetBrains Mono"';
+      ctx.fillStyle = '#ffe07a';
+      ctx.fillText(ud.noteName, 64, 30);
+      ctx.font = '10px "JetBrains Mono"';
+      ctx.fillStyle = 'rgba(255,190,61,0.45)';
+      ctx.fillText('↕ '+ud.antipode, 64, 46);
+    } else {
+      // Chord name
+      const ch = ud.chord;
+      ctx.font = 'bold 20px "JetBrains Mono"';
+      ctx.fillStyle = ch.quality === 'm' ? '#7aadff' : ch.quality === 'd' ? '#ff7aad' : '#a0c8ff';
+      ctx.fillText(ch.name, 64, 28);
+      ctx.font = '9px "JetBrains Mono"';
+      ctx.fillStyle = 'rgba(100,160,255,0.5)';
+      ctx.fillText(ch.notes.join(' '), 64, 44);
+    }
+
+    const tex = new THREE.CanvasTexture(cv2);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, opacity: 0.92, depthTest: false,
+    }));
+    const dir = ud.pos.clone().normalize();
+    sp.position.copy(dir.multiplyScalar(R * 1.09));
+    sp.scale.set(ud.type === 'pentagon' ? 0.3 : 0.26, 0.18, 1);
+    scene.add(sp);
+    lSprites.push(sp);
+  });
+}
+
+// ── INTERACTION ──
+const ray = new THREE.Raycaster();
+const mp  = new THREE.Vector2();
+let drag = false, lastP = {x:0,y:0}, vel = {x:0,y:0};
+let hovered = null;
+
+function getHittable() { return fMeshes; }
+
+function onDown(x, y) {
+  drag = true; lastP = {x,y}; vel = {x:0,y:0};
+}
+function onMove(x, y) {
+  if (drag) {
+    const dx = x - lastP.x, dy = y - lastP.y;
+    vel.x = dy * 0.005; vel.y = dx * 0.005;
+    sGroup.rotation.x += vel.x;
+    sGroup.rotation.y += vel.y;
+    lastP = {x,y};
+  } else {
+    // hover (desktop only)
+    const rect = cv.getBoundingClientRect();
+    mp.set(((x-rect.left)/rect.width)*2-1, -((y-rect.top)/rect.height)*2+1);
+    ray.setFromCamera(mp, camera);
+    const hits = ray.intersectObjects(getHittable());
+    const prev = hovered;
+    hovered = hits.length ? hits[0].object : null;
+    cv.style.cursor = hovered ? 'pointer' : 'grab';
+    if (hovered !== prev) {
+      fMeshes.forEach(f => {
+        if (f === hovered) {
+          f.material.emissiveIntensity = 0.6;
+          f.material.emissive = new THREE.Color(f.userData.type==='pentagon' ? 0xffbe3d : 0x3d7fff);
+        } else if (f === selFace) {
+          f.material.emissiveIntensity = 1.0;
+        } else {
+          f.material.emissiveIntensity = f.userData.baseEmissive;
+        }
+      });
+    }
+  }
+}
+function onUp(x, y, wasDrag) {
+  drag = false;
+  if (!wasDrag) {
+    const rect = cv.getBoundingClientRect();
+    mp.set(((x-rect.left)/rect.width)*2-1, -((y-rect.top)/rect.height)*2+1);
+    ray.setFromCamera(mp, camera);
+    const hits = ray.intersectObjects(getHittable());
+    if (hits.length) clickFace(hits[0].object);
+  }
+}
+
+cv.addEventListener('mousedown', e => onDown(e.clientX, e.clientY));
+cv.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+let md = {x:0,y:0};
+cv.addEventListener('mousedown', e => { md = {x:e.clientX,y:e.clientY}; });
+cv.addEventListener('mouseup', e => {
+  const moved = Math.abs(e.clientX-md.x)+Math.abs(e.clientY-md.y) > 6;
+  onUp(e.clientX, e.clientY, moved);
+});
+
+// Touch
+let td = {x:0,y:0}, tMoved = false;
+cv.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  td = {x:t.clientX,y:t.clientY}; tMoved = false;
+  onDown(t.clientX, t.clientY);
+}, {passive:true});
+cv.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  const moved = Math.abs(t.clientX-td.x)+Math.abs(t.clientY-td.y) > 5;
+  if (moved) tMoved = true;
+  onMove(t.clientX, t.clientY);
+}, {passive:true});
+cv.addEventListener('touchend', e => {
+  const t = e.changedTouches[0];
+  onUp(t.clientX, t.clientY, tMoved);
+});
+
+// ── FACE CLICK ──
+let selFace = null;
+
+function clickFace(face) {
+  const ud = face.userData;
+  selFace = face;
+
+  // Reset all
+  fMeshes.forEach(f => {
+    f.material.emissiveIntensity = f.userData.baseEmissive;
+    f.material.emissive = new THREE.Color(
+      f.userData.type==='pentagon' ? 0xffbe3d : 0x3d7fff
+    );
+  });
+  face.material.emissiveIntensity = 1.0;
+
+  // Glow ring
+  spawnGlow(ud.pos, ud.type === 'pentagon' ? 0xffbe3d : 0x3d7fff);
+
+  if (ud.type === 'pentagon') {
+    // Show note info
+    showInfo(ud.noteName, 'note',
+      `Антипод: ${ud.antipode} (тритон ↕6 полутонов)`,
+      []
+    );
+    playNote(ud.noteIdx);
+  } else {
+    // Show chord info
+    const ch = ud.chord;
+    showInfo(ch.name, 'chord',
+      `${ch.qualName.toUpperCase()} · ${ch.notes.join(' – ')}`,
+      getSuggestions(ch)
+    );
+    playChord(ch);
+    if (ST.mode === 'compose' || ST.rec) addProg(ch);
+
+    // Highlight the 3 pentagon-notes that form this chord
+    ud.pentaTriple.forEach(pi => {
+      const pf = fMeshes.find(f => f.userData.type==='pentagon' && f.userData.idx===pi);
+      if (pf) {
+        pf.material.emissiveIntensity = 0.5;
+        pf.material.emissive = new THREE.Color(0xffbe3d);
+      }
+    });
+  }
+}
+
+function getSuggestions(chord) {
+  const chords = buildScaleChords();
+  return chords.filter(c => c.name !== chord.name).slice(0,4);
+}
+
+// ── INFO CARD ──
+function showInfo(name, type, sub, sugg) {
+  document.getElementById('ic-name').textContent = name;
+  const badge = document.getElementById('ic-badge');
+  badge.textContent = type === 'note' ? 'НОТА' : 'АККОРД';
+  badge.className = 'ic-badge ' + type; // wait, id
+  badge.style.cssText = type === 'note'
+    ? 'padding:3px 9px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.12em;font-family:var(--fm);background:rgba(255,190,61,.15);border:1px solid rgba(255,190,61,.4);color:var(--gold);'
+    : 'padding:3px 9px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.12em;font-family:var(--fm);background:rgba(61,127,255,.15);border:1px solid rgba(61,127,255,.4);color:var(--accent);';
+  document.getElementById('ic-notes').textContent = sub;
+  const el = document.getElementById('ic-sugg');
+  el.innerHTML = sugg.map(s =>
+    `<div class="sugg-pill" onclick="clickSugg('${s.name}')">${s.name}</div>`
+  ).join('');
+  document.getElementById('info-card').classList.remove('hidden');
+}
+
+function clickSugg(name) {
+  const chord = buildScaleChords().find(c => c.name === name);
+  if (!chord) return;
+  showInfo(chord.name, 'chord', `${chord.qualName.toUpperCase()} · ${chord.notes.join(' – ')}`, getSuggestions(chord));
+  playChord(chord);
+  addProg(chord);
+}
+
+// ── PROGRESSION ──
+function addProg(chord) {
+  ST.prog.push({...chord, id: Date.now()});
+  updateProg();
+}
+function undoLast() { ST.prog.pop(); updateProg(); }
+function clearAll() {
+  ST.prog = []; ST.selected = null;
+  document.getElementById('info-card').classList.add('hidden');
+  updateProg();
+  fMeshes.forEach(f => {
+    f.material.emissiveIntensity = f.userData.baseEmissive;
+  });
+}
+
+function updateProg() {
+  const p = ST.prog;
+  // Drawer
+  const ps = document.getElementById('pscroll');
+  ps.innerHTML = p.length === 0
+    ? '<div style="font-size:10px;color:var(--muted);font-family:var(--fm);padding:6px 0;">Click chords to build...</div>'
+    : p.map((c,i) => `<div class="ph-item ${i===p.length-1?'cur':''}"><span>${c.name}</span><span class="ph-num">${i+1}</span></div>`).join('');
+  ps.scrollTop = ps.scrollHeight;
+  // Timeline
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = p.length === 0
+    ? '<div class="tph">No chords yet</div>'
+    : p.map((c,i) => `<div class="tn ${i===p.length-1?'cur':''}" onclick="seekTo(${i})">${c.name}</div>`).join('');
+  tl.scrollLeft = tl.scrollWidth;
+}
+
+function seekTo(i) {
+  if (ST.prog[i]) { playChord(ST.prog[i]); updateChordDisplay(ST.prog[i]); }
+}
+
+// ── GLOW ──
+function spawnGlow(pos, color) {
+  const geo = new THREE.RingGeometry(0.1, 0.14, 32);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.9, side:THREE.DoubleSide });
+  const m = new THREE.Mesh(geo, mat);
+  const dir = pos.clone().normalize();
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+  m.position.copy(dir.multiplyScalar(R*1.02));
+  sGroup.add(m);
+  glowQ.push({m, age:0});
+}
+
+// ── AUDIO ──
+let actx;
+function getACtx() {
+  if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function nToF(note, oct=4) {
+  const i = CHR.indexOf(note);
+  return 440 * Math.pow(2, (i-9+(oct-4)*12)/12);
+}
+function playNote(noteIdx, oct=4) {
+  const ctx = getACtx();
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = nToF(CHR[noteIdx], oct);
+  g.gain.setValueAtTime(0, ctx.currentTime);
+  g.gain.linearRampToValueAtTime(0.18, ctx.currentTime+0.03);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+1.2);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime+1.2);
+}
+function playChord(chord) {
+  if (!chord?.notes) return;
+  const ctx = getACtx();
+  chord.notes.forEach((n, j) => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = j===0 ? 'triangle' : 'sine';
+    osc.frequency.value = nToF(n, j===0?3:4);
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.1, ctx.currentTime+0.06);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+2.0);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime+2.0);
+  });
+}
+
+// ── PLAYBACK ──
+function togglePlay() {
+  ST.playing = !ST.playing;
+  const b = document.getElementById('btn-play');
+  b.textContent = ST.playing ? '⏸' : '▶';
+  b.classList.toggle('on', ST.playing);
+  if (ST.playing) {
+    ST.playIdx = 0;
+    stepPlay();
+    ST.playTimer = setInterval(() => {
+      ST.playIdx++;
+      if (ST.playIdx >= ST.prog.length) {
+        if (ST.looping) ST.playIdx=0; else { togglePlay(); return; }
+      }
+      stepPlay();
+    }, (60/ST.bpm)*2000);
+  } else {
+    clearInterval(ST.playTimer);
+  }
+}
+function stepPlay() {
+  const c = ST.prog[ST.playIdx];
+  if (!c) return;
+  playChord(c);
+  document.querySelectorAll('.tn').forEach((n,i) => n.classList.toggle('cur',i===ST.playIdx));
+}
+function toggleRec() {
+  ST.rec = !ST.rec;
+  document.getElementById('btn-rec').classList.toggle('on', ST.rec);
+}
+function adjBPM(d) {
+  ST.bpm = Math.max(40, Math.min(240, ST.bpm+d));
+  document.getElementById('bpmv').textContent = ST.bpm;
+}
+function exportProg() {
+  if (!ST.prog.length) { alert('Добавь аккорды в прогрессию!'); return; }
+  const s = ST.prog.map(c=>c.name).join(' → ');
+  alert(`Прогрессия: ${s}\nТональность: ${CHR[ST.root]} ${ST.scale}\nBPM: ${ST.bpm}\n\nMIDI-экспорт — в следующей версии с Tone.js`);
+}
+
+// ── MODE ──
+function setMode(m, el) {
+  ST.mode = m;
+  document.querySelectorAll('.mtab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ── KEY / SCALE ──
+const NOTES_LIST = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const kg = document.getElementById('kgrid');
+NOTES_LIST.forEach((n,i) => {
+  const b = document.createElement('div');
+  b.className='kbtn'+(i===0?' on':'');
+  b.textContent=n;
+  b.onclick=()=>{
+    document.querySelectorAll('.kbtn').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    ST.root=i;
+    buildSphere();
+  };
+  kg.appendChild(b);
+});
+
+function pickScale(el) {
+  document.querySelectorAll('.sbtn').forEach(x=>x.classList.remove('on'));
+  el.classList.add('on');
+  ST.scale=el.dataset.s;
+  buildSphere();
+}
+
+// ── DRAWER ──
+function toggleDrawer() {
+  document.getElementById('drawer').classList.toggle('open');
+  document.getElementById('dov').classList.toggle('on');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('dov').classList.remove('on');
+}
+
+// ── ONBOARDING ──
+function startApp() {
+  document.getElementById('ob').style.display='none';
+  getACtx();
+}
+
+// ── RESIZE ──
+function resize() {
+  const w=window.innerWidth, h=window.innerHeight;
+  renderer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── RENDER LOOP ──
+function tick() {
+  requestAnimationFrame(tick);
+  if (!drag && sGroup) {
+    sGroup.rotation.x += vel.x; sGroup.rotation.y += vel.y;
+    vel.x *= 0.94; vel.y *= 0.94;
+    if (Math.abs(vel.y)<0.0008) sGroup.rotation.y += 0.0007;
+  }
+  // Glow decay
+  for (let i=glowQ.length-1;i>=0;i--) {
+    const g=glowQ[i]; g.age+=0.045;
+    g.m.scale.setScalar(1+g.age*0.6);
+    g.m.material.opacity=Math.max(0,0.85-g.age);
+    if (g.age>1.5) { sGroup.remove(g.m); glowQ.splice(i,1); }
+  }
+  renderer.render(scene, camera);
+}
+
+// ── INIT ──
+buildSphere();
+tick();
+</script>
+</body>
+</html>
